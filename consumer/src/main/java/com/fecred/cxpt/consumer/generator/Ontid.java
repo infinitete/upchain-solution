@@ -221,6 +221,24 @@ public class Ontid {
     }
 
     ///
+    /// 通过监控器来控制节点开始、暂停
+    ///
+    @KafkaListener(id = "monitor", topics = "${node}-control")
+    public void control(ConsumerRecord<String, String> cr) throws Exception {
+        String key = cr.key();
+        String val = cr.value();
+
+        if (key.equals("control")) {
+            switch (val.toLowerCase()) {
+                case "start": this.startService();break;
+                case "pause": this.pauseService();break;
+                case "unpause": this.unPauseService();break;
+                default: return;
+            }
+        }
+    }
+
+    ///
     /// 处理后的数据通过completed主题返回
     ///
     private void generator(MPersonal personal) throws InterruptedException {
@@ -282,6 +300,56 @@ public class Ontid {
         template.send("c"+this.nodeName, this.key, JSON.toJSONString(personal));
     }
 
+    private boolean startService() {
+        try {
+            if (!this.started) {
+                sdk = getSdk();
+                generator(new MPersonal());
+                this.started = true;
+                Node node = new Node();
+                node.setBootTime(this.bootTime);
+                node.setNode(this.nodeName);
+                node.setStartTime(new Date().getTime());
+
+                this.node = node;
+                this.nodeRepository.saveAndFlush(node);
+            }
+        } catch (InterruptedException e) {
+            this.started = false;
+        } catch (SDKException e) {
+            this.started = false;
+        } finally {
+            return this.started;
+        }
+    }
+
+    private boolean pauseService() {
+        if (!this.started) {
+            return false;
+        }
+
+        this.paused = true;
+
+        return this.paused;
+    }
+
+    private boolean unPauseService() {
+
+        if (!this.started || !this.paused) {
+            return false;
+        }
+
+        this.paused = false;
+
+        try {
+            generator(new MPersonal());
+        } catch (Exception e) {
+            this.paused = true;
+        }
+
+        return !this.paused;
+    }
+
     ///
     /// 定时通过status主题向监控节点推送节点信息
     ///
@@ -299,6 +367,7 @@ public class Ontid {
 
         template.send("status", this.nodeName, JSON.toJSONString(data));
     }
+
 
     private OntSdk getSdk() throws SDKException {
         OntSdk sdk = OntSdk.getInstance();

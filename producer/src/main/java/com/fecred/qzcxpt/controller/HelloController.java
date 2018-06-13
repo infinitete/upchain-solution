@@ -58,7 +58,7 @@ public class HelloController {
         return response;
     }
 
-    @KafkaListener(id = "ontid", topicPattern = "cnode.*")
+    @KafkaListener(id = "ontid", topicPattern = "cnode.*+")
     public void sender(ConsumerRecord<String, String> cr) throws  Exception {
 
         String key = cr.key();
