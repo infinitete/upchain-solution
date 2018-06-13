@@ -5,6 +5,7 @@ import org.apache.curator.x.discovery.ServiceDiscovery;
 import org.apache.curator.x.discovery.ServiceDiscoveryBuilder;
 import org.apache.curator.x.discovery.ServiceInstanceBuilder;
 import org.apache.curator.x.discovery.details.JsonInstanceSerializer;
+import org.apache.kafka.common.protocol.types.Field;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -65,10 +66,15 @@ public class ContextListener implements ApplicationListener<ApplicationReadyEven
 
             Map payload = new HashMap();
             payload.put("nodeName", this.nodeName);
-            payload.put("start", "/api/v1/node/start");
-            payload.put("status", "/api/v1/node/status");
-            payload.put("pause", "/api/v1/node/pause");
-            payload.put("unpause", "/api/v1/node/unpause");
+
+            Map<String, String> urls = new HashMap<>();
+
+            urls.put("start", "/api/v1/node/start");
+            urls.put("status", "/api/v1/node/status");
+            urls.put("pause", "/api/v1/node/pause");
+            urls.put("unpause", "/api/v1/node/unpause");
+
+            payload.put("urls", urls);
             service.payload(payload);
 
             ServiceInstance<Map> instance = service.build();

@@ -58,7 +58,7 @@ public class HelloController {
         return response;
     }
 
-    @KafkaListener(id = "test", topics = "completed")
+    @KafkaListener(id = "ontid", topicPattern = "cnode.*")
     public void sender(ConsumerRecord<String, String> cr) throws  Exception {
 
         String key = cr.key();
@@ -74,8 +74,8 @@ public class HelloController {
         // 取出下一条并发送给对应的generator
         personal = iPersonal.getUnONTIDPerson();
 
-        System.out.println("TID: " + personal.getTid());
+        System.out.println("Topic: " + cr.topic().replaceAll("cnode", "node"));
 
-        template.send("generate", key, JSON.toJSONString(personal));
+        template.send(cr.topic().replaceAll("cnode", "node"), key, JSON.toJSONString(personal));
     }
 }

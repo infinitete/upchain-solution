@@ -23,7 +23,6 @@ public class ZookeeperConfiguration {
         // 重试次数为3次，超过3次视为失败
         //
         RetryPolicy retryPolicy = new ExponentialBackoffRetry(1000, 3);
-
         CuratorFramework client = CuratorFrameworkFactory.newClient(zkUrl, retryPolicy);
 
         client.start();

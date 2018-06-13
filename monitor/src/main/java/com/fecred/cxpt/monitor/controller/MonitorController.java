@@ -42,7 +42,6 @@ public class MonitorController {
             response = new ArrayList<ServiceInstance<Map>>(services);
         }
 
-
         return  response;
     }
 }

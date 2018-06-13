@@ -48,6 +48,9 @@ public class Ontid {
     @Value("${ont.restful}")
     private String ontRestful;
 
+    @Value("${ont.wallets.path}")
+    private String walletsPath;
+
     private OntSdk sdk;
 
     @Value("${node}")
@@ -59,9 +62,6 @@ public class Ontid {
 
     private int completed = 0;
     private int failed = 0;
-
-    @Autowired
-    private CuratorFramework client;
 
     Ontid() throws Exception {
         Double temp = Math.random();
@@ -201,7 +201,7 @@ public class Ontid {
     /// 所以通过内容的key来区分内容是否属于这个节点
     /// 如果不属于，则不处理
     ///
-    @KafkaListener(id = "test", topics = "generate")
+    @KafkaListener(id = "ontid", topics = "${node}")
     public void listener(ConsumerRecord<String, String> cr) throws Exception {
 
         //
@@ -233,7 +233,7 @@ public class Ontid {
         }
 
         if (personal != null && personal.getTid() != null) {
-            sdk.openWalletFile("/home/mio/Template/wallets/"+ personal.getTid().toString() +".json");
+            sdk.openWalletFile(this.walletsPath + "/" + personal.getTid().toString() +".json");
             WalletMgr walletMgr = sdk.getWalletMgr();
             Identity identity;
 
@@ -279,10 +279,12 @@ public class Ontid {
         }
 
         // 完成以后，发回更新到数据库
-        template.send("completed", this.key, JSON.toJSONString(personal));
+        template.send("c"+this.nodeName, this.key, JSON.toJSONString(personal));
     }
 
-    // 定时通过status主题向监控节点推送节点信息
+    ///
+    /// 定时通过status主题向监控节点推送节点信息
+    ///
     @Scheduled(cron = "*/5 * * * * ?")
     private void selfMessage() {
         Map data = new HashMap();
