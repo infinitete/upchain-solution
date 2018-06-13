@@ -5,7 +5,9 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
 
 @Configuration
 public class ZookeeperConfiguration {
@@ -13,6 +15,7 @@ public class ZookeeperConfiguration {
     @Value("${zk.url}")
     private String zkUrl;
 
+    @Bean
     public CuratorFramework getCuratorFramework() {
 
         //

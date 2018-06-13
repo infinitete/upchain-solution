@@ -32,8 +32,9 @@ import java.util.Map;
 @EnableAutoConfiguration
 public class Ontid {
 
-    String key;
+    private String key;
     private Boolean started = false;
+    private Boolean paused  = false;
 
     @Autowired
     private NodeRepository nodeRepository;
@@ -43,6 +44,9 @@ public class Ontid {
 
     @Autowired
     private KafkaTemplate<String, String> template;
+
+    @Value("${ont.restful}")
+    private String ontRestful;
 
     private OntSdk sdk;
 
@@ -62,20 +66,20 @@ public class Ontid {
     Ontid() throws Exception {
         Double temp = Math.random();
         key = temp.toString();
+        this.bootTime = new Date().getTime();
     }
 
-    @RequestMapping("/node/start")
+    @RequestMapping("/api/v1/node/start")
     @ResponseBody
     public Response start() {
 
         Response response = new Response();
 
         try {
-            if (started == false) {
+            if (!this.started) {
                 sdk = getSdk();
                 generator(new MPersonal());
-                started = true;
-
+                this.started = true;
                 Node node = new Node();
                 node.setBootTime(this.bootTime);
                 node.setNode(this.nodeName);
@@ -83,23 +87,27 @@ public class Ontid {
 
                 this.node = node;
                 this.nodeRepository.saveAndFlush(node);
+                response.setData("Started");
+            } else {
+                response.setData("Node has started at: " + this.node.getStartTime());
             }
 
             response.setCode(200);
-            response.setData("Started");
+
         } catch (InterruptedException e) {
+            response.setData(e.getMessage());
             started = false;
             response.setCode(500);
-            response.setData(e.getMessage());
         } catch (SDKException e) {
-            response.setCode(500);
             response.setData(e.getMessage());
+            started = false;
+            response.setCode(500);
         }
 
         return response;
     }
 
-    @RequestMapping("/node/status")
+    @RequestMapping("/api/v1/node/status")
     @ResponseBody
     public Response status() {
         Response response = new Response();
@@ -109,9 +117,9 @@ public class Ontid {
         HashMap<Object, Object> data = new HashMap<>();
 
         if (this.node == null) {
-            data.put("Status", 0);
             data.put("Message", "Waiting for start");
-            data.put("Status", 0);
+            data.put("Started", this.started);
+            data.put("Paused", this.paused);
             data.put("Key", this.key);
             data.put("BootedAt", this.bootTime);
             data.put("Completed", this.completed);
@@ -122,7 +130,7 @@ public class Ontid {
         }
 
         data.put("Message", "Working");
-        data.put("Status", 1);
+        data.put("Paused", this.paused);
         data.put("Node", this.nodeName);
         data.put("Key", this.key);
         data.put("BootedAt", this.bootTime);
@@ -135,10 +143,71 @@ public class Ontid {
         return response;
     }
 
+    ///
+    /// 控制节点暂停
+    ///
+    @RequestMapping("/api/v1/node/pause")
+    @ResponseBody
+    public Response pause() {
+        Response response = new Response();
+
+        if (!this.started) {
+            response.setCode(200);
+            response.setData("Node does not start working");
+
+            return  response;
+        }
+
+        this.paused = true;
+        response.setCode(200);
+        response.setData("Node paused");
+        return  response;
+    }
+
+    ///
+    /// 控制节点结束暂停，继续工作
+    ///
+    @RequestMapping("/api/v1/node/unpause")
+    @ResponseBody
+    public Response unPause() {
+
+        Response response = new Response();
+        response.setData("Node unpaused");
+
+        if (!this.started) {
+            response.setCode(200);
+            response.setData("Node does not start working");
+
+            return  response;
+        }
+
+        this.paused = false;
+
+        try {
+            generator(new MPersonal());
+            response.setCode(200);
+            response.setData("Node unpaused");
+        } catch (Exception e) {
+            response.setCode(500);
+            response.setData("Node unpause Error: " + e.getMessage());
+        }
+
+        return  response;
+    }
+
+    ///
+    /// 订阅generate主题
+    /// 这个主题是所有节点共享的
+    /// 所以通过内容的key来区分内容是否属于这个节点
+    /// 如果不属于，则不处理
+    ///
     @KafkaListener(id = "test", topics = "generate")
     public void listener(ConsumerRecord<String, String> cr) throws Exception {
 
-
+        //
+        // 如果数据的key是节点自己的则处理
+        // 否则不做任何事情
+        //
         if (cr.key().equals(this.key)) {
             MPersonal personal = JSON.parseObject(cr.value(), MPersonal.class);
 
@@ -151,7 +220,17 @@ public class Ontid {
         }
     }
 
+    ///
+    /// 处理后的数据通过completed主题返回
+    ///
     private void generator(MPersonal personal) throws InterruptedException {
+
+        //
+        // 如果节点被设置了暂停，则不再处理数据
+        //
+        if (this.paused) {
+            return;
+        }
 
         if (personal != null && personal.getTid() != null) {
             sdk.openWalletFile("/home/mio/Template/wallets/"+ personal.getTid().toString() +".json");
@@ -203,20 +282,18 @@ public class Ontid {
         template.send("completed", this.key, JSON.toJSONString(personal));
     }
 
-    // 定时推送节点信息
+    // 定时通过status主题向监控节点推送节点信息
     @Scheduled(cron = "*/5 * * * * ?")
     private void selfMessage() {
         Map data = new HashMap();
 
-        data.put("Message", this.started ? "Node is running" : "Waiting for start");
-        data.put("Status", this.started);
+        data.put("Started", this.started);
+        data.put("Paused", this.paused);
         data.put("NodeName", this.nodeName);
         data.put("Key", this.key);
         data.put("BootedAt", this.bootTime);
         data.put("Completed", this.completed);
         data.put("Failed", this.failed);
-
-        System.out.println(data);
 
         template.send("status", this.nodeName, JSON.toJSONString(data));
     }
@@ -224,7 +301,7 @@ public class Ontid {
     private OntSdk getSdk() throws SDKException {
         OntSdk sdk = OntSdk.getInstance();
 
-        sdk.setRestful("http://localhost:21334");
+        sdk.setRestful(this.ontRestful);
         sdk.setCodeAddress("80e7d2fc22c24c466f44c7688569cc6e6d6c6f92");
         sdk.setDefaultConnect(sdk.getRestful());
 

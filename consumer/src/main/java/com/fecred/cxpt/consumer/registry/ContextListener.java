@@ -18,8 +18,11 @@ import java.util.Map;
 import com.fecred.cxpt.consumer.utils.netUtil;
 
 //
-// 系统启动以后
-// 注册自己
+// 系统成功启动以后
+//
+// 通过服务注册注册自己
+// 主要作用是监控节点可以实时获取在线节点基本信息
+// 比如IP、端口、可用的服务
 //
 @Configuration
 public class ContextListener implements ApplicationListener<ApplicationReadyEvent> {
@@ -27,9 +30,16 @@ public class ContextListener implements ApplicationListener<ApplicationReadyEven
     @Value("${server.port}")
     private String port = "8080";
 
+    ///
+    /// 务必保证节点名称的惟一性
+    ///
     @Value("${node}")
     private String nodeName;
 
+    ///
+    /// 所有节点的服务名称务必要一致
+    /// 同时监控节点也要通过服务名称来获取这个这个服务下的所有节点
+    ///
     @Value("${service.name}")
     private String serviceName = "generator";
 
@@ -54,8 +64,11 @@ public class ContextListener implements ApplicationListener<ApplicationReadyEven
             service.name(serviceName);
 
             Map payload = new HashMap();
-            payload.put("start", "/node/start");
-            payload.put("status", "/node/status");
+            payload.put("nodeName", this.nodeName);
+            payload.put("start", "/api/v1/node/start");
+            payload.put("status", "/api/v1/node/status");
+            payload.put("pause", "/api/v1/node/pause");
+            payload.put("unpause", "/api/v1/node/unpause");
             service.payload(payload);
 
             ServiceInstance<Map> instance = service.build();
